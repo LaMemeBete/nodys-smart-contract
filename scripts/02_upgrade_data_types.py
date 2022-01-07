@@ -19,13 +19,9 @@ def main():
     )
     proxy = TransparentUpgradeableProxy[-1]
     proxy_admin = ProxyAdmin[-1]
-    print(f"Proxy admin is {proxy_admin.getProxyAdmin(proxy)}")
-    print(f"Imp address is {proxy_admin.getProxyImplementation(proxy)}")
+
     upgrade(account, proxy, data_types_v2, proxy_admin, data_types_v2.setDataTypes, 1)
     print("Proxy has been upgraded!")
     proxy_data_types_v2 = Contract.from_abi("DataTypesV2", proxy.address, DataTypesV2.abi)
-    print(f"Starting value {proxy_data_types_v2.retrieveDataTypes()}")
-    print(f"Ending value {proxy_data_types_v2.retrieveDataTypes()}")
-    print("----------------")
-    print(f"Proxy admin is {proxy_admin.getProxyAdmin(proxy)}")
-    print(f"Imp address is {proxy_admin.getProxyImplementation(proxy)}")
+    '''print(f"Proxy admin is {proxy_admin.getProxyAdmin(proxy)}")
+    print(f"Imp address is {proxy_admin.getProxyImplementation(proxy)}")'''

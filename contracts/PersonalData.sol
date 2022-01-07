@@ -9,6 +9,19 @@ contract PersonalData is Ownable {
     address public dataTypesAddress;
     DataTypesInterface public dataTypes;
     string public serviceName;
+    uint256 public requestCounter;
+    uint256 public dataTypesCounter;
+
+    enum STATE {
+        OPEN,
+        CLOSE
+    }
+
+    struct DataTypesUsed {
+        string dataType;
+        STATE state;
+    }
+    mapping(uint256 => DataTypesUsed) public dataTypesUsed;
 
     constructor(
         address _serviceAddress,
@@ -21,7 +34,12 @@ contract PersonalData is Ownable {
         dataTypesAddress = _dataTypesAddress;
         dataTypes = DataTypesInterface(dataTypesAddress);
         serviceName = _serviceName;
+        dataTypesCounter = 0;
     }
+
+    /*
+     * Service meta modififcations
+     */
 
     function updateServiceName(string memory _serviceName) public {
         serviceName = _serviceName;
@@ -31,7 +49,30 @@ contract PersonalData is Ownable {
         serviceAddress = _serviceAddress;
     }
 
-    function retrieveDataTypes() public view returns (string[] memory) {
-        return dataTypes.retrieveDataTypes();
+    /*
+     * Adding new data types used is using
+     */
+
+    function checkDataTypeUsed(string memory _dt) private view returns (bool) {
+        for (uint256 i = 0; i < dataTypesCounter; i++) {
+            if (
+                keccak256(bytes(_dt)) ==
+                keccak256(bytes(dataTypesUsed[i].dataType))
+            ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function addDataType(string memory _dt) public {
+        require(
+            dataTypes.checkDataTypeExistence(_dt),
+            "Data Type is not permitted."
+        );
+        //require(checkDataTypeUsed(_dt), "Data Type is already used.");
+        DataTypesUsed memory newDataTypesUsed = DataTypesUsed(_dt, STATE.CLOSE);
+        dataTypesUsed[dataTypesCounter] = newDataTypesUsed;
+        dataTypesCounter += 1;
     }
 }
