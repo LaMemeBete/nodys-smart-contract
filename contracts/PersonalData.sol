@@ -9,19 +9,48 @@ contract PersonalData is Ownable {
     address public dataTypesAddress;
     DataTypesInterface public dataTypes;
     string public serviceName;
-    uint256 public requestCounter;
-    uint256 public dataTypesCounter;
+    uint256 public userRequestsCounter;
+    uint256 public serviceRequestsCounter;
+    string[] public dataTypesUsedList;
 
     enum STATE {
         OPEN,
         CLOSE
     }
+    enum DATA_STATE {
+        DELETED,
+        INTACT
+    }
+    enum REQUEST_STATE {
+        PENDING,
+        SUCCESS,
+        FAILURE
+    }
+    enum REQUEST_TYPE {
+        DELETE,
+        SHARE,
+        CLOSE,
+        OPEN
+    }
 
     struct DataTypesUsed {
         string dataType;
         STATE state;
+        DATA_STATE dataState;
+        bool isValue;
     }
-    mapping(uint256 => DataTypesUsed) public dataTypesUsed;
+
+    struct Request {
+        string dataType;
+        REQUEST_STATE state;
+        REQUEST_TYPE requestType;
+        STATE stateRequestCreation;
+        DATA_STATE dataStateRequestCreation;
+    }
+
+    mapping(string => DataTypesUsed) public dataTypesUsed;
+    mapping(uint256 => Request) public userRequests;
+    mapping(uint256 => Request) public serviceRequests;
 
     constructor(
         address _serviceAddress,
@@ -34,7 +63,8 @@ contract PersonalData is Ownable {
         dataTypesAddress = _dataTypesAddress;
         dataTypes = DataTypesInterface(dataTypesAddress);
         serviceName = _serviceName;
-        dataTypesCounter = 0;
+        userRequestsCounter = 0;
+        serviceRequestsCounter = 0;
     }
 
     /*
@@ -52,27 +82,135 @@ contract PersonalData is Ownable {
     /*
      * Adding new data types used is using
      */
-
-    function checkDataTypeUsed(string memory _dt) private view returns (bool) {
-        for (uint256 i = 0; i < dataTypesCounter; i++) {
-            if (
-                keccak256(bytes(_dt)) ==
-                keccak256(bytes(dataTypesUsed[i].dataType))
-            ) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    function addDataType(string memory _dt) public {
+    function addDataType(
+        string memory _dt,
+        STATE state,
+        DATA_STATE dataState
+    ) public {
         require(
             dataTypes.checkDataTypeExistence(_dt),
             "Data Type is not permitted."
         );
-        //require(checkDataTypeUsed(_dt), "Data Type is already used.");
-        DataTypesUsed memory newDataTypesUsed = DataTypesUsed(_dt, STATE.CLOSE);
-        dataTypesUsed[dataTypesCounter] = newDataTypesUsed;
-        dataTypesCounter += 1;
+        require(!dataTypesUsed[_dt].isValue, "Data Type already in use.");
+        DataTypesUsed memory newDataTypesUsed = DataTypesUsed(
+            _dt,
+            state,
+            dataState,
+            true
+        );
+        dataTypesUsed[_dt] = newDataTypesUsed;
+        dataTypesUsedList.push(_dt);
+    }
+
+    /*
+     * User making request from service
+     */
+    function checkUserRequestValidity(
+        string memory _dt,
+        REQUEST_TYPE requestType
+    ) private view returns (bool) {
+        if (
+            dataTypesUsed[_dt].state == STATE.OPEN &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.DELETED
+        ) {
+            return false;
+        }
+        if (
+            dataTypesUsed[_dt].state == STATE.CLOSE &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.DELETED
+        ) {
+            return false;
+        }
+        if (
+            dataTypesUsed[_dt].state == STATE.OPEN &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.INTACT &&
+            (requestType != REQUEST_TYPE.SHARE &&
+                requestType != REQUEST_TYPE.CLOSE)
+        ) {
+            return false;
+        }
+        if (
+            dataTypesUsed[_dt].state == STATE.CLOSE &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.INTACT &&
+            (requestType != REQUEST_TYPE.SHARE &&
+                requestType != REQUEST_TYPE.DELETE)
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    function createRequestFromUser(string memory _dt, REQUEST_TYPE requestType)
+        public
+    {
+        require(
+            dataTypes.checkDataTypeExistence(_dt),
+            "Data Type is not permitted."
+        );
+        require(dataTypesUsed[_dt].isValue, "Data Type not in use.");
+        require(checkUserRequestValidity(_dt, requestType), "Invalid request.");
+        Request memory newRequest = Request(
+            _dt,
+            REQUEST_STATE.PENDING,
+            requestType,
+            dataTypesUsed[_dt].state,
+            dataTypesUsed[_dt].dataState
+        );
+        userRequests[userRequestsCounter] = newRequest;
+        userRequestsCounter += 1;
+    }
+
+    /*
+     * Service making request from user
+     */
+    function checkServiceRequestValidity(
+        string memory _dt,
+        REQUEST_TYPE requestType
+    ) private view returns (bool) {
+        if (
+            dataTypesUsed[_dt].state == STATE.OPEN &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.INTACT
+        ) {
+            return false;
+        }
+        if (
+            dataTypesUsed[_dt].state == STATE.OPEN &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.DELETED
+        ) {
+            return false;
+        }
+        if (
+            dataTypesUsed[_dt].state == STATE.CLOSE &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.INTACT &&
+            requestType != REQUEST_TYPE.OPEN
+        ) {
+            return false;
+        }
+        if (
+            dataTypesUsed[_dt].state == STATE.CLOSE &&
+            dataTypesUsed[_dt].dataState == DATA_STATE.DELETED &&
+            requestType != REQUEST_TYPE.OPEN
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    function createRequestFromService(
+        string memory _dt,
+        REQUEST_TYPE requestType
+    ) public {
+        require(!dataTypes.checkDataTypeExistence(_dt) && requestType != REQUEST_TYPE.OPEN, "Invalid request.");
+        require(checkServiceRequestValidity(_dt, requestType), "Invalid request.");
+        Request memory newRequest = Request(
+            _dt,
+            REQUEST_STATE.PENDING,
+            requestType,
+            dataTypesUsed[_dt].state,
+            dataTypesUsed[_dt].dataState
+        );
+        serviceRequests[serviceRequestsCounter] = newRequest;
+        serviceRequestsCounter += 1;
+        
     }
 }
