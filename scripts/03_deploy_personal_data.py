@@ -22,5 +22,5 @@ def main():
         publish_source=config["networks"][network.show_active()]["verify"],
     )
     # print(personal_data.retString("cat"))
-    personal_data.addDataType("user.provided.identifiable.gender")
+    # personal_data.addDataType("user.provided.identifiable.gender")
     #print(personal_data.retrieveDataTypes())
