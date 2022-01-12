@@ -27,10 +27,10 @@ contract PersonalData is Ownable {
         FAILURE
     }
     enum REQUEST_TYPE {
-        DELETE,
-        SHARE,
         CLOSE,
-        OPEN
+        OPEN,
+        DELETE,
+        SHARE
     }
 
     struct DataTypesUsed {
@@ -198,19 +198,100 @@ contract PersonalData is Ownable {
 
     function createRequestFromService(
         string memory _dt,
-        REQUEST_TYPE requestType
+        REQUEST_TYPE _requestType
     ) public {
-        require(!dataTypes.checkDataTypeExistence(_dt) && requestType != REQUEST_TYPE.OPEN, "Invalid request.");
-        require(checkServiceRequestValidity(_dt, requestType), "Invalid request.");
+        require(
+            !dataTypes.checkDataTypeExistence(_dt) &&
+                _requestType != REQUEST_TYPE.OPEN,
+            "Invalid request."
+        );
+        require(
+            checkServiceRequestValidity(_dt, _requestType),
+            "Invalid request."
+        );
         Request memory newRequest = Request(
             _dt,
             REQUEST_STATE.PENDING,
-            requestType,
+            _requestType,
             dataTypesUsed[_dt].state,
             dataTypesUsed[_dt].dataState
         );
         serviceRequests[serviceRequestsCounter] = newRequest;
         serviceRequestsCounter += 1;
-        
+    }
+
+    function resolveServiceRequest(
+        uint256 _requestId,
+        REQUEST_STATE _requestState
+    ) public {
+        require(
+            _requestState != REQUEST_STATE.PENDING,
+            "Invalid request state, cannot be of type pending."
+        );
+        require(
+            _requestId < serviceRequestsCounter,
+            "Request id dos not exist."
+        );
+        /*
+         * Not sure if we still need this require.
+         */
+        require(
+            serviceRequests[_requestId].stateRequestCreation ==
+                dataTypesUsed[serviceRequests[_requestId].dataType].state &&
+                serviceRequests[_requestId].dataStateRequestCreation ==
+                dataTypesUsed[serviceRequests[_requestId].dataType].dataState,
+            "State or data state of the data type in request changed. Request cannot be resolved."
+        );
+        require(
+            checkServiceRequestValidity(
+                serviceRequests[_requestId].dataType,
+                serviceRequests[_requestId].requestType
+            ),
+            "State or data state of the data type in request changed. Request cannot be resolved."
+        );
+
+        if (_requestState == REQUEST_STATE.FAILURE) {
+            serviceRequests[_requestId].state = _requestState;
+        }
+        //_requestType == REQUEST_STATE.SUCCESS
+        else {
+            if (serviceRequests[_requestId].requestType == REQUEST_TYPE.OPEN) {
+                if (
+                    dataTypesUsed[serviceRequests[_requestId].dataType].isValue
+                ) {
+                    if (
+                        serviceRequests[_requestId].dataStateRequestCreation ==
+                        DATA_STATE.INTACT
+                    ) {
+                        dataTypesUsed[serviceRequests[_requestId].dataType]
+                            .state = STATE.OPEN;
+                        serviceRequests[_requestId].state = _requestState;
+                    }
+                    if (
+                        serviceRequests[_requestId].dataStateRequestCreation ==
+                        DATA_STATE.DELETED
+                    ) {
+                        dataTypesUsed[serviceRequests[_requestId].dataType]
+                            .dataState = DATA_STATE.INTACT;
+                        dataTypesUsed[serviceRequests[_requestId].dataType]
+                            .state = STATE.OPEN;
+                        serviceRequests[_requestId].state = _requestState;
+                    }
+                } else {
+                    addDataType(
+                        serviceRequests[_requestId].dataType,
+                        dataTypesUsed[serviceRequests[_requestId].dataType]
+                            .state,
+                        dataTypesUsed[serviceRequests[_requestId].dataType]
+                            .dataState
+                    );
+                    serviceRequests[_requestId].state = _requestState;
+                }
+            } else {
+                revert(
+                    "Could not complete request. Desired changes are forbidden."
+                );
+            }
+        }
     }
 }
